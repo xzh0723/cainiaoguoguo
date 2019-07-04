@@ -1,0 +1,81 @@
+# -*- coding: utf-8 -*-
+# @Time    : 2019/7/3 23:42
+# @Author  : xuzhihai0723
+# @Email   : 18829040039@163.com
+# @File    : cainiaoguoguo.py
+# @Software: PyCharm
+
+import requests
+import execjs
+import time
+
+class deliveryQuerySpider(object):
+
+    def __init__(self, delivery_num=None):
+        self.delivery_num = delivery_num
+        self.headers = {
+            'Accept': 'application/json',
+            'Content-type': 'application/x-www-form-urlencoded',
+            'Origin': 'http://www.guoguo-app.com',
+            'Referer': 'http://www.guoguo-app.com/',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.80 Safari/537.36'
+        }
+        self.api = 'http://h5api.m.taobao.com/h5/mtop.cnwireless.cnlogisticdetailservice.wapquerylogisticpackagebymailno/1.0/?'
+        self.params = {
+            'jsv': '2.4.2',
+            'appKey': '12574478',
+            't': int(time.time() * 1000),
+            'api': 'mtop.cnwireless.CNLogisticDetailService.wapqueryLogisticPackageByMailNo',
+            'AntiCreep': 'true',
+            'v': '1.0',
+            'timeout': '5000',
+            'type': 'originaljson',
+            'dataType': 'json',
+            'c': '',
+            'data': '{"mailNo": %s,"cpCode":""}' % self.delivery_num
+        }
+
+    @staticmethod
+    def get_sign(token, timestamp, appKey, data):
+        """
+        生成参数sign
+        :param token:
+        :param timestamp:
+        :param appKey:
+        :param data:
+        :return:
+        """
+        with open('sign.js', 'rb') as f:
+            js = f.read().decode()
+        ctx = execjs.compile(js)
+        sign = ctx.call('getSign', token, timestamp, appKey, data)
+        # print(sign)
+        return sign
+
+    def run(self):
+        """
+        运行
+        :return:
+        """
+        sign = self.get_sign(self.params['c'].split('_')[0], self.params['t'], self.params['appKey'], self.params['data'])
+        self.params.update({'sign': sign})
+        r = requests.get(self.api, params=self.params, headers=self.headers)
+
+        self.params.update({'c': r.json()['c']})
+        sign_ = self.get_sign(self.params['c'].split('_')[0], self.params['t'], self.params['appKey'], self.params['data'])
+        self.params.update({'sign': sign_})
+        res = requests.get(self.api, params=self.params, headers=self.headers)
+        if 'SUCCESS' in res.json()['ret'][0]:
+            item = {
+                'partnerName': res.json()['data']['partnerName'],
+                'packageStatus': res.json()['data']['packageStatus'],
+                'transitList': res.json()['data']['transitList']
+            }
+            print(item)
+        else:
+            print(res.json()['ret'][0])
+
+if __name__ == '__main__':
+    delivery_num = input('请输入快递单号> \n')
+    spider = deliveryQuerySpider(delivery_num)
+    spider.run()
